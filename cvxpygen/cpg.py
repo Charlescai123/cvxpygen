@@ -120,6 +120,9 @@ def extract_canonicalization(problem, solver, solver_opts, enable_settings) -> C
         solver_opts=solver_opts
     )
     param_prob = data['param_prob']
+    
+    if not param_prob.parameters:
+        raise ValueError('Solution does not depend on parameters. Aborting code generation.')
 
     # cone problems check
     if hasattr(param_prob, 'cone_dims'):
@@ -412,7 +415,7 @@ def get_dual_variable_info(inverse_data, solver_interface, cvxpy_interface_class
     elif solver_interface.solver_type == 'conic':
         con_canon = inverse_data[-1][cvxpy_interface_class.EQ_CONSTR] + inverse_data[-1][cvxpy_interface_class.NEQ_CONSTR]
     con_canon_dict = {c.id: c for c in con_canon}
-    d_canon_offsets = np.cumsum([0] + [c.args[0].size for c in con_canon[:-1]])
+    d_canon_offsets = np.cumsum([0] + [c.size for c in con_canon[:-1]])
     if solver_interface.dual_var_split:
         n_split = len(inverse_data[-1][cvxpy_interface_class.EQ_CONSTR])
         d_canon_vectors = [solver_interface.dual_var_names[0]] * n_split + [solver_interface.dual_var_names[1]] * (len(d_canon_offsets) - n_split)
@@ -426,23 +429,23 @@ def get_dual_variable_info(inverse_data, solver_interface, cvxpy_interface_class
     d_offsets = [d_canon_offsets_dict[i] for i in dual_ids]
     d_vectors = [d_canon_vectors_dict[i] for i in dual_ids]
     d_sizes = [con_canon_dict[i].size for i in dual_ids]
-    d_shapes = [con_canon_dict[i].shape for i in dual_ids]
+    d_shapes = [con_canon_dict[i].shape if np.prod(con_canon_dict[i].shape) == con_canon_dict[i].size else None for i in dual_ids]
     d_names = [f'd{i}' for i in range(len(dual_ids))]
     d_i_to_name = {i: f'd{i}' for i in range(len(dual_ids))}
+    d_name_to_size = {n: s for n, s in zip(d_names, d_sizes)}
     d_name_to_shape = {n: d_shapes[i] for i, n in d_i_to_name.items()}
-    d_name_to_indices = {n: (v, o + np.arange(np.prod(d_name_to_shape[n])))
+    d_name_to_indices = {n: (v, o + np.arange(d_name_to_size[n]))
                          for n, v, o in zip(d_names, d_vectors, d_offsets)}
     d_name_to_vec = {n: v for n, v in zip(d_names, d_vectors)}
     d_name_to_offset = {n: o for n, o in zip(d_names, d_offsets)}
-    d_name_to_size = {n: s for n, s in zip(d_names, d_sizes)}
 
     # initialize values to zero
     d_name_to_init = dict()
-    for name, shape in d_name_to_shape.items():
-        if len(shape) == 0:
+    for name, size in d_name_to_size.items():
+        if size == 1:
             d_name_to_init[name] = 0
         else:
-            d_name_to_init[name] = np.zeros(shape=shape)
+            d_name_to_init[name] = np.zeros(size)
 
     dual_variable_info = DualVariableInfo(d_name_to_offset, d_name_to_indices, d_name_to_size,
                                           d_sizes, d_name_to_shape, d_name_to_init, d_name_to_vec)
@@ -466,7 +469,7 @@ def get_constraint_info(solver_interface) -> ConstraintInfo:
                           mapping_rows_eq, mapping_rows_ineq)
 
 
-def update_adjacency_matrix(adjacency, i, parameter_info, mapping) -> np.ndarray:
+def update_adjacency_matrix(adjacency, i, parameter_info: ParameterInfo, mapping: list) -> np.ndarray:
     
     # Iterate through parameters and update adjacency if there are non-zero entries in mapping
     for j in range(parameter_info.num):
@@ -526,6 +529,7 @@ def write_c_code(problem: cp.Problem, configuration: Configuration,
                 getattr(utils, f'write_solve_def'),
                 configuration, prim_variable_info, dual_variable_info, 
                 parameter_info, parameter_canon, solver_interface, parameter_canon_gradient)
+    
     if configuration.gradient_two_stage:
         # switch back to second-stage pointer for remainder of code generation
         solver_interface.ws_ptrs.primal_solution = primal_solution_ptr

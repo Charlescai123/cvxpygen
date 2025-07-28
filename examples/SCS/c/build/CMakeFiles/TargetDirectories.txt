@@ -1,0 +1,17 @@
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/CMakeFiles/cpg_example.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/CMakeFiles/cpg.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/CMakeFiles/edit_cache.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/CMakeFiles/rebuild_cache.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/CMakeFiles/list_install_components.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/CMakeFiles/install.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/CMakeFiles/install/local.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/CMakeFiles/install/strip.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/uninstall.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/scsdir.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/scsindir.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/edit_cache.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/rebuild_cache.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/list_install_components.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/install.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/install/local.dir
+/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/SCS/c/build/solver_code/CMakeFiles/install/strip.dir

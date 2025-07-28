@@ -19,6 +19,7 @@ from cvxpy.reductions.solvers.conic_solvers.scs_conif import SCS
 from cvxpy.reductions.solvers.conic_solvers.ecos_conif import ECOS
 from cvxpy.reductions.solvers.conic_solvers.clarabel_conif import CLARABEL
 from cvxpy.reductions.solvers.conic_solvers.qoco_conif import QOCO
+from cvxpy.reductions.solvers.conic_solvers.cvxopt_conif import CVXOPT
 
 
 UNSUPPORTED_ON_WINDOWS = ['CLARABEL']
@@ -34,6 +35,7 @@ def get_interface_class(solver_name: str) -> "SolverInterface":
         'CLARABEL': (ClarabelInterface, CLARABEL),
         'QOCO': (QOCOInterface, QOCO),
         'QOCOGEN': (QOCOGENInterface, QOCO),
+        'ECVXCONE': (ECVXCONEInterface, CVXOPT)
     }
     interface = mapping.get(solver_name.upper(), None)
     if interface is None:
@@ -188,6 +190,172 @@ class SolverInterface(ABC):
     
     def write_gradient_workspace_def(f, prefix, parameter_canon) -> None:
         pass
+
+
+class ECVXCONEInterface(SolverInterface):
+    solver_name = 'ECVXCONE'
+    solver_type = 'conic'
+    canon_p_ids = ['c', 'A', 'b', 'G', 'h']
+    canon_p_ids_constr_vec = ['b', 'h']
+    supports_gradient = False
+    solve_function_call = '{prefix}cvxopt_flag = CVXOPT_solve({prefix}cvxopt_workspace)'
+
+    # header files and sources
+    header_files = ['"cvxopt_solver.h"']
+    cmake_headers = ['${cvxopt_headers}']
+    cmake_sources = ['${cvxopt_sources}']
+
+    inmemory_preconditioning = True
+    ws_statically_allocated_in_solver_code = False
+
+    ws_ptrs = WorkspacePointerInfo(
+        objective_value = 'cvxopt_workspace->primal_obj',
+        iterations = 'cvxopt_workspace->info->iter',
+        status = 'cvxopt_flag',
+        primal_residual = 'cvxopt_workspace->info->pres',
+        dual_residual = 'cvxopt_workspace->info->dres',
+        primal_solution = 'cvxopt_workspace->x',
+        dual_solution = 'cvxopt_workspace->z',
+        settings = 'cvxopt_workspace->stgs->{setting_name}'
+    )
+
+    sol_statically_allocated = False
+    status_is_int = True
+
+    numeric_types = {'float': 'double', 'int': 'int'}
+
+    stgs_dynamically_allocated = True
+    stgs_requires_extra_struct_type = False
+    stgs_direct_write_ptr = None
+    stgs_reset_function = None
+    stgs = {
+        'feastol': Setting(type='cpg_float', default='1e-7'),
+        'abstol': Setting(type='cpg_float', default='1e-7'),
+        'reltol': Setting(type='cpg_float', default='1e-7'),
+        'maxit': Setting(type='cpg_int', default='100', name_cvxpy='max_iters')
+    }
+
+    dual_var_split = True
+    dual_var_names = ['y', 'z']
+
+    docu = 'https://cvxopt.org/userguide/coneprog.html'
+
+    def __init__(self, data, p_prob, enable_settings):
+        n_var = p_prob.x.size
+        n_eq = p_prob.cone_dims.zero
+        n_ineq = data['G'].shape[0]
+
+        indices_obj, indptr_obj, shape_obj = self.get_problem_data_index(p_prob.reduced_P)
+        indices_constr, indptr_constr, shape_constr = self.get_problem_data_index(p_prob.reduced_A)
+
+        canon_constants = {'n': n_var, 'm': n_ineq, 'p': n_eq,
+                           'l': p_prob.cone_dims.nonneg,
+                           'q': np.array(p_prob.cone_dims.soc),
+                           'q_size': len(p_prob.cone_dims.soc),
+                           's': p_prob.cone_dims.psd,
+                           's_size': len(p_prob.cone_dims.psd),
+                           'e': p_prob.cone_dims.exp}
+
+        # function_call=f'{{prefix}}cpg_copy_all();\n'
+        #             f'    {{prefix}}ecos_workspace = ECOS_setup({canon_constants["n"]}, {canon_constants["m"]}, {canon_constants["p"]}, {canon_constants["l"]}, {canon_constants["n_cones"]}'
+        #             f', {"0" if canon_constants["n_cones"] == 0 else "(int *) &{prefix}ecos_q"}, {canon_constants["e"]}'
+        #             f', {{prefix}}Canon_Params_conditioning.G->x, {{prefix}}Canon_Params_conditioning.G->p, {{prefix}}Canon_Params_conditioning.G->i'
+        #             f', {"0" if canon_constants["p"] == 0 else "{prefix}Canon_Params_conditioning.A->x"}'
+        #             f', {"0" if canon_constants["p"] == 0 else "{prefix}Canon_Params_conditioning.A->p"}'
+        #             f', {"0" if canon_constants["p"] == 0 else "{prefix}Canon_Params_conditioning.A->i"}'
+        #             f', {{prefix}}Canon_Params_conditioning.c, {{prefix}}Canon_Params_conditioning.h'
+        #             f', {"0" if canon_constants["p"] == 0 else "{prefix}Canon_Params_conditioning.b"})'
+
+        self.parameter_update_structure = {
+            'init': ParameterUpdateLogic(
+                update_pending_logic=UpdatePendingLogic([], extra_condition='!{prefix}cvxopt_workspace', functions_if_false=['AbcGh']),
+                function_call=f'{{prefix}}cpg_copy_all();\n'
+                              f'    {{prefix}}conelp_ws = cvxopt_init(...)'  # Replace with actual API
+            ),
+            'AbcGh': ParameterUpdateLogic(
+                update_pending_logic=UpdatePendingLogic(['A', 'b', 'G'], '||', ['c', 'h']),
+                function_call=f'{{prefix}}cpg_copy_all();\n'
+                              f'      CVXOPT_updateData(...)'  # Replace with actual API
+            ),
+        }
+
+        super().__init__(self.solver_name, n_var, n_eq, n_ineq, indices_obj, indptr_obj, shape_obj,
+                         indices_constr, indptr_constr, shape_constr, canon_constants, enable_settings)
+        
+    
+    def generate_code(self, configuration, code_dir, solver_code_dir, cvxpygen_directory, parameter_canon, gradient, prefix):
+        # copy sources
+        if os.path.isdir(solver_code_dir):
+            shutil.rmtree(solver_code_dir)
+        os.mkdir(solver_code_dir)
+        dirs_to_copy = ['src', 'include']
+        for dtc in dirs_to_copy:
+            shutil.copytree(os.path.join(cvxpygen_directory, 'solvers', 'ecvxcone', dtc),
+                            os.path.join(solver_code_dir, dtc))
+        # copy files
+        files_to_copy = ['CMakeLists.txt']
+        for fl in files_to_copy:
+            shutil.copyfile(os.path.join(cvxpygen_directory, 'solvers', 'ecvxcone', fl),
+                            os.path.join(solver_code_dir, fl))
+        shutil.copy(os.path.join(cvxpygen_directory, 'template', 'LICENSE'), code_dir)
+
+        # disable BLAS and LAPACK
+        # read_write_file(os.path.join(code_dir, 'c', 'solver_code', 'scs.mk'),
+                        # lambda x: x.replace('USE_LAPACK = 1', 'USE_LAPACK = 0'))
+
+        # modify CMakeLists.txt
+        cmake_replacements = [
+            (' include/', ' ${CMAKE_CURRENT_SOURCE_DIR}/include/'),
+            (' src/', ' ${CMAKE_CURRENT_SOURCE_DIR}/src/'),
+        ]
+        read_write_file(os.path.join(solver_code_dir, 'CMakeLists.txt'),
+                        lambda x: multiple_replace(x, cmake_replacements))
+
+        # adjust top-level CMakeLists.txt
+        sdir = '${CMAKE_CURRENT_SOURCE_DIR}/solver_code/'
+        indent = ' ' * 6
+        read_write_file(os.path.join(code_dir, 'c', 'CMakeLists.txt'),
+                        lambda x: x.replace(sdir + 'include',
+                                            sdir + 'include\n' + indent + sdir + 'linsys'))
+
+        # adjust setup.py
+        indent = ' ' * 30
+        read_write_file(os.path.join(code_dir, 'setup.py'),
+                        lambda x: x.replace("os.path.join('c', 'solver_code', 'include'),",
+                                            "os.path.join('c', 'solver_code', 'include'),\n" +
+                                            indent + "os.path.join('c', 'solver_code'),"))
+    
+    def declare_workspace(self, f, prefix, parameter_canon) -> None:
+        
+        # Declare CVXOPT settings
+        f.write(f'\n// CVXOPT Default settings\n')
+        write_struct_prot(f, f'{prefix}cvxopt_settings', 'CVXOPT_Settings')
+        
+    def define_workspace(self, f, prefix, parameter_canon) -> None:
+        
+        # Define the Cone Dims structure
+        f.write(f'\n// Struct containing CVXOPT Cone dimensions\n')
+        if self.canon_constants['q_size'] > 0:  # SOC buf
+            write_vec_def(f, self.canon_constants['q'], f'{prefix}q_buf', '')
+            f.write('\n')
+        if self.canon_constants['s_size'] > 0:  # PSD buf
+            write_vec_def(f, self.canon_constants['s'], f'{prefix}s_buf', '')
+            f.write('\n')
+            
+        q_ptr = 'NULL' if self.canon_constants['q_size'] == 0 else f'{prefix}q_buf'
+        s_ptr = 'NULL' if self.canon_constants['s_size'] == 0 else f'{prefix}s_buf'
+        
+        cone_dims = [
+            ('l', '', str(self.canon_constants['l'])), 
+            ('q', '', q_ptr),  # SOC cone sizes
+            ('q_size', '', str(self.canon_constants['q_size'])),  # SOC cone sizes
+            ('s', '', s_ptr),  # PSD cone sizes
+            ('s_size', '', str(self.canon_constants['s_size'])),  # PSD cone sizes
+        ]
+        cone_dims_fields = [x[0] for x in cone_dims]
+        cone_dims_casts = [x[1] for x in cone_dims]
+        cone_dims_values = [x[2] for x in cone_dims]
+        write_struct_def(f, cone_dims_fields, cone_dims_casts, cone_dims_values, f'{prefix}cvxopt_dims', 'DIMs')
 
 
 class OSQPInterface(SolverInterface):

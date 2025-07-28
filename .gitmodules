@@ -13,3 +13,6 @@
 [submodule "cvxpygen/solvers/qoco"]
 	path = cvxpygen/solvers/qoco
 	url = https://github.com/qoco-org/qoco.git
+[submodule "cvxpygen/solvers/ecvxcone"]
+	path = cvxpygen/solvers/ecvxcone
+	url = https://github.com/Charlescai123/ecvxcone.git

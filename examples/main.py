@@ -11,6 +11,8 @@ if __name__ == "__main__":
     1. Generate Code
     '''
 
+    solver = 'SCS'
+
     # define CVXPY problem
     m, n = 3, 2
     x = cp.Variable(n, name='x')
@@ -25,10 +27,10 @@ if __name__ == "__main__":
     A.value[0, 1] = np.random.randn()
     A.value[1, 1] = np.random.randn()
     b.value = np.random.randn(m)
-    problem.solve(solver='SCS')
+    problem.solve(solver=solver)
 
     # generate code
-    cpg.generate_code(problem, code_dir='nonneg_LS', solver='SCS')
+    cpg.generate_code(problem, code_dir=solver, solver=solver)
 
     '''
     2. Solve & Compare
@@ -36,7 +38,7 @@ if __name__ == "__main__":
 
     # solve problem conventionally
     t0 = time.time()
-    val = problem.solve(solver='SCS')
+    val = problem.solve(solver=solver)
     t1 = time.time()
     sys.stdout.write('\nCVXPY\nSolve time: %.3f ms\n' % (1000*(t1-t0)))
     sys.stdout.write('Primal solution: x = [%.6f, %.6f]\n' % tuple(x.value))
@@ -45,7 +47,7 @@ if __name__ == "__main__":
 
     # solve problem with C code via python wrapper
     t0 = time.time()
-    val = problem.solve(method='CPG', updated_params=['A', 'b'], verbose=False)
+    val = problem.solve(method='CPG', updated_params=['A', 'b'])
     t1 = time.time()
     sys.stdout.write('\nCVXPYgen\nSolve time: %.3f ms\n' % (1000 * (t1 - t0)))
     sys.stdout.write('Primal solution: x = [%.6f, %.6f]\n' % tuple(x.value))

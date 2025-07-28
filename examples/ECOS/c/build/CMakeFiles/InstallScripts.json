@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/ECOS/c/build/cmake_install.cmake",
+		"/home/edgebot/ros2_ws/src/edge-learning-go2/code_conversion/cvxpy/cvxpygen/examples/ECOS/c/build/solver_code/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
